@@ -15,7 +15,7 @@
  </url>
  <url>
   <loc>https://quodlibetor.github.io/archive.html</loc>
-  <lastmod>2017-01-16T05:19:00Z</lastmod>
+  <lastmod>2017-01-16T14:13:00Z</lastmod>
  </url>
  <url>
   <loc>https://quodlibetor.github.io/categories/</loc>
@@ -31,10 +31,6 @@
  </url>
  <url>
   <loc>https://quodlibetor.github.io/posts/debugging-rusts-new-custom-derive-system/</loc>
-  <lastmod>2017-01-16T05:11:00Z</lastmod>
- </url>
- <url>
-  <loc>https://quodlibetor.github.io/posts/field-by-field-errors/</loc>
   <lastmod>2017-01-16T05:11:00Z</lastmod>
  </url>
 </urlset>
