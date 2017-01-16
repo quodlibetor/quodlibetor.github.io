@@ -1,0 +1,4 @@
+Sitemap: https://quodlibetor.github.io/sitemapindex.xml
+
+User-Agent: *
+Host: quodlibetor.github.io

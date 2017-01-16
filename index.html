@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html prefix="og: http://ogp.me/ns# article: http://ogp.me/ns/article# " lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="ain't that the truth">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Light Fiction</title>
+<link href="assets/css/all-nocdn.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" href="rss.xml">
+<link rel="canonical" href="https://quodlibetor.github.io/">
+<!--[if lt IE 9]><script src="assets/js/html5.js"></script><![endif]--><link rel="prefetch" href="posts/field-by-field-errors/" type="text/html">
+</head>
+<body>
+<a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+
+<!-- Menubar -->
+
+<nav class="navbar navbar-inverse navbar-static-top"><div class="container">
+<!-- This keeps the margins nice -->
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-navbar" aria-controls="bs-navbar" aria-expanded="false">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="https://quodlibetor.github.io/">
+
+                <span id="blog-title">Light Fiction</span>
+            </a>
+        </div>
+<!-- /.navbar-header -->
+        <div class="collapse navbar-collapse" id="bs-navbar" aria-expanded="false">
+            <ul class="nav navbar-nav">
+<li>
+<a href="archive.html">Archive</a>
+                </li>
+<li>
+<a href="categories/">Tags</a>
+                </li>
+<li>
+<a href="rss.xml">RSS feed</a>
+
+                
+            </li>
+</ul>
+<ul class="nav navbar-nav navbar-right"></ul>
+</div>
+<!-- /.navbar-collapse -->
+    </div>
+<!-- /.container -->
+</nav><!-- End of Menubar --><div class="container" id="content" role="main">
+    <div class="body-content">
+        <!--Body content-->
+        <div class="row">
+            
+            
+
+    
+<div class="postindex">
+    <article class="h-entry post-text"><header><h1 class="p-name entry-title"><a href="posts/field-by-field-errors/" class="u-url">Field-by-Field errors</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn">
+                Brandon W Maister
+            </span></p>
+            <p class="dateline"><a href="posts/field-by-field-errors/" rel="bookmark"><time class="published dt-published" datetime="2017-01-15T23:57:30-05:00" title="2017-01-15 23:57">2017-01-15 23:57</time></a></p>
+        </div>
+    </header><div class="e-content entry-content">
+    <div>
+<p>I come from more dynamic languages (mostly Python, Java, Javascript), where
+types live in the object namespace. In general I consider runtime fiddling --
+either introspection or, god forbid, modification -- with the type space to be
+a wild antipattern. In other words, I don't like magic in production code.</p>
+<p>That clean philosophy goes out the window when I'm writing tests. For tests I
+want the fewest number of lines of code to give me maximum debuggability, which
+often means type-and-object-introspection and all kinds of modification
+shenanigans.</p>
+<p>I've been wanting to play with the new Macros 1.1 (custom derive) system for
+awhile, so I've been looking for something that really calls out for magic,
+something that can't be done reasonably without observing the syntactic
+structure of the code I'm working with.</p>
+<p>One feature that I miss when working with large structs in Rust
+is
+<a href="http://joel-costigliola.github.io/assertj/assertj-core-features-highlight.html#field-by-field">AssertJ's field-by-field assertions</a>.
+It's some Java magic that very quickly lets you determine which parts of
+objects are distinct. This gives me a pretty nice workflow where I can create
+an "expected object" in a setup function and get error messages that show me
+specifically what is unexpected, while giving full context for the objects that
+are busted. In particular, I love it when it tells me that two UUIDs don't
+match by one bit inside of classes that have 10, 20, or 30 fields. (Nobody
+wants classes with 30 fields, I know.)</p>
+<p>So <a href="https://github.com/quodlibetor/field-by-field">I've written</a> something like
+it for Rust.</p>
+<p>Given a struct and a test function that look like:</p>
+<pre class="code literal-block"><span></span><span class="w">  </span><span class="cp">#[derive(FieldByField, Debug)]</span><span class="w"></span>
+<span class="w">  </span><span class="k">struct</span><span class="w"> </span><span class="n">Something</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">      </span><span class="n">hello</span><span class="o">:</span><span class="w"> </span><span class="nb">String</span><span class="p">,</span><span class="w"></span>
+<span class="w">      </span><span class="n">val</span><span class="o">:</span><span class="w"> </span><span class="kt">i8</span><span class="p">,</span><span class="w"></span>
+<span class="w">      </span><span class="n">val2</span><span class="o">:</span><span class="w"> </span><span class="kt">i8</span><span class="p">,</span><span class="w"></span>
+<span class="w">      </span><span class="n">val3</span><span class="o">:</span><span class="w"> </span><span class="kt">i8</span><span class="p">,</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+
+<span class="w">  </span><span class="cp">#[test]</span><span class="w"></span>
+<span class="w">  </span><span class="k">fn</span><span class="w"> </span><span class="n">assert_catches_differences</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">      </span><span class="kd">let</span><span class="w"> </span><span class="n">one</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Something</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">hello</span><span class="o">:</span><span class="w"> </span><span class="s">"one"</span><span class="p">.</span><span class="n">into</span><span class="p">(),</span><span class="w"> </span><span class="n">val</span><span class="o">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">val2</span><span class="o">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="n">val3</span><span class="o">:</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="p">};</span><span class="w"></span>
+<span class="w">      </span><span class="kd">let</span><span class="w"> </span><span class="n">two</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Something</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">hello</span><span class="o">:</span><span class="w"> </span><span class="s">"two"</span><span class="p">.</span><span class="n">into</span><span class="p">(),</span><span class="w"> </span><span class="n">val</span><span class="o">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">val2</span><span class="o">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">val3</span><span class="o">:</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="p">};</span><span class="w"></span>
+
+<span class="w">      </span><span class="n">one</span><span class="p">.</span><span class="n">assert_equal_field_by_field</span><span class="p">(</span><span class="o">&amp;</span><span class="n">two</span><span class="p">);</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+</pre>
+
+
+<p>I can get a pretty good error message, that shows exactly which fields
+weren't equal:</p>
+<pre class="code literal-block"><span></span>thread 'assert_catches_differences' panicked at '
+      Items are not equal:
+          hello: "one" != "two"
+          val2: 5 != 2
+      actually: Something { hello: "one", val: 1, val2: 5, val3: 3 }
+      expected: Something { hello: "two", val: 1, val2: 2, val3: 3 }
+  ', derive-struct.rs:11
+</pre>
+
+
+<p>For small structs like this it isn't essential, but with objects that contain
+many fields, or objects that contain a lot of fields that look mostly similar
+I find it to be a huge time-saver.</p>
+<p>This isn't the story of that (as-yet-officially-unnamed) crate. This also isn't
+the story of /learning/ macros 1.1,
+<a href="https://cbreeden.github.io/Macros11/">cbreedan has already covered that well</a>.</p>
+<p>It's a partial story of me learning to debug my custom derive code, and some
+tools provided by the Rust ecosystem to do so.</p>
+</div>
+    </div>
+    </article><article class="h-entry post-text"><header><h1 class="p-name entry-title"><a href="posts/debugging-rusts-new-custom-derive-system/" class="u-url">Debugging Rust's new Custom Derive system</a></h1>
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn">
+                Brandon W Maister
+            </span></p>
+            <p class="dateline"><a href="posts/debugging-rusts-new-custom-derive-system/" rel="bookmark"><time class="published dt-published" datetime="2017-01-15T17:21:40-05:00" title="2017-01-15 17:21">2017-01-15 17:21</time></a></p>
+        </div>
+    </header><div class="e-content entry-content">
+    <div>
+<h2>Why a custom derive macro</h2>
+<p>I've been working
+on <a href="https://github.com/quodlibetor/field-by-field">a couple of crates</a> to copy
+over
+<a href="http://joel-costigliola.github.io/assertj/assertj-core-features-highlight.html#field-by-field">the magic of AssertJ's field-by-field assertions</a> to
+Rust. Partially as a way of learning Macros 1.1/custom derive, and partially
+because it's one of my favorite testing tools and nobody should have to live
+without it.</p>
+<p>This post is about what I've been doing to <em>debug</em> my custom derive
+implementation, which can require a couple of extra steps to get to the same
+kind of good error messages that I'm used to from regular Rust code.</p>
+<h2>Debugging</h2>
+<p>There are a couple
+tips <a href="https://github.com/dtolnay/syn#testing">in the <code>syn</code> crate's README</a>,
+which were the first thing that I read when I started working on
+field-by-field. Most of this post is just me exploring the implications and
+going into a bit/lots more detail.</p>
+<h3>test files</h3>
+<p>I'm writing a testing tool, so of course the first thing that I want to do is
+test that my code does what I want it to do. Plugins (custom-derive included)
+cannot be tested using the standard in-module <code>#[test]</code> annotation that most
+Rust code uses, but you can still use integration tests via the <code>tests/</code>
+directory that Cargo knows about.</p>
+<p>These modules are linked against the macro crate that you are writing, so
+everything works basically the same except that you <a href="https://github.com/quodlibetor/field-by-field/blob/28a5003fdcb58b350125197d0708844af8c7ec1b/field-by-field-macros/tests/derive-enum-struct.rs">end up using a
+<code>#[macro_use] my_crate</code> to make it
+work</a>.</p>
+<p>At that point the standard <code>#[test]</code> attribute does what you expect, and you
+can use the common <code>cargo test</code> and <code>cargo test --test &lt;integration-test-file&gt;
+&lt;optional-test-filter</code> to do what you would expect:</p>
+<pre class="code literal-block"><span></span>$ cargo <span class="nb">test</span>
+    Finished debug <span class="o">[</span>unoptimized + debuginfo<span class="o">]</span> target<span class="o">(</span>s<span class="o">)</span> in 0.0 secs
+     Running .../derive_enum_mixed-d370953e520402cf
+...
+<span class="nb">test</span> result: ok. <span class="m">10</span> passed<span class="p">;</span> <span class="m">0</span> failed<span class="p">;</span> <span class="m">0</span> ignored<span class="p">;</span> <span class="m">0</span> measured
+
+     Running .../derive_enum_struct-8851e9b38fffd49d
+...
+<span class="nb">test</span> result: ok. <span class="m">6</span> passed<span class="p">;</span> <span class="m">0</span> failed<span class="p">;</span> <span class="m">0</span> ignored<span class="p">;</span> <span class="m">0</span> measured
+
+     Running .../derive_enum_tuple-4b98f23c906ffa8d
+...
+<span class="nb">test</span> result: ok. <span class="m">6</span> passed<span class="p">;</span> <span class="m">0</span> failed<span class="p">;</span> <span class="m">0</span> ignored<span class="p">;</span> <span class="m">0</span> measured
+
+     Running .../derive_enum_unit-f5f0a72af200d8c4
+...
+<span class="nb">test</span> result: ok. <span class="m">5</span> passed<span class="p">;</span> <span class="m">0</span> failed<span class="p">;</span> <span class="m">0</span> ignored<span class="p">;</span> <span class="m">0</span> measured
+
+     Running .../derive_struct-116d0c78a0c6e62f
+...
+<span class="nb">test</span> result: ok. <span class="m">4</span> passed<span class="p">;</span> <span class="m">0</span> failed<span class="p">;</span> <span class="m">0</span> ignored<span class="p">;</span> <span class="m">0</span> measured
+</pre>
+
+
+<p>Or to be more specific:</p>
+<pre class="code literal-block"><span></span>$ cargo <span class="nb">test</span> --test derive-struct assert_catches
+    Finished debug <span class="o">[</span>unoptimized + debuginfo<span class="o">]</span> target<span class="o">(</span>s<span class="o">)</span> in 0.0 secs
+     Running .../derive_struct-116d0c78a0c6e62f
+
+running <span class="m">1</span> <span class="nb">test</span>
+<span class="nb">test</span> assert_catches_differences ... ok
+
+<span class="nb">test</span> result: ok. <span class="m">1</span> passed<span class="p">;</span> <span class="m">0</span> failed<span class="p">;</span> <span class="m">0</span> ignored<span class="p">;</span> <span class="m">0</span> measured
+</pre>
+
+
+<p>Wheeee.</p>
+<h2>Now we've got two kinds of problems</h2>
+<h3>Syntactically invalid code</h3>
+<p>There are two -- maybe two and half -- phases to compiling these integration
+tests:</p>
+<ol>
+<li>We have to compile the custom-derive library</li>
+<li>We have to use the compiled lib to actually generate some code</li>
+<li>That compiled code might generate code that is syntactically unsound</li>
+<li>Or it could generate code that is syntactically fine, but violates some
+      of rusts guarantees.</li>
+</ol>
+<p>This means that there are three different kind of errors that we can get:
+<em> Regular Rust errors
+</em> Rust errors because some generated code is invalid
+* Rust errors because the generated code doesn't type-check.</p>
+<p>Syntactic errors end up causing <em>extremely</em> long error lines:</p>
+<pre class="code literal-block"><span></span><span class="n">error</span><span class="o">:</span><span class="w"> </span><span class="n">expected</span><span class="w"> </span><span class="n">one</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="err">`</span><span class="o">=&gt;</span><span class="err">`</span><span class="p">,</span><span class="w"> </span><span class="err">`</span><span class="k">if</span><span class="err">`</span><span class="p">,</span><span class="w"> </span><span class="n">or</span><span class="w"> </span><span class="err">`</span><span class="o">|</span><span class="err">`</span><span class="p">,</span><span class="w"> </span><span class="n">found</span><span class="w"> </span><span class="err">`</span><span class="p">}</span><span class="err">`</span><span class="w"></span>
+<span class="w"> </span><span class="o">--&gt;</span><span class="w"> </span><span class="o">&lt;</span><span class="k">proc</span><span class="o">-</span><span class="n">macro</span><span class="w"> </span><span class="n">source</span><span class="w"> </span><span class="n">code</span><span class="o">&gt;:</span><span class="mi">1</span><span class="o">:</span><span class="mi">367</span><span class="w"></span>
+<span class="w">  </span><span class="o">|</span><span class="w"></span>
+<span class="mi">1</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="k">impl</span><span class="w"> </span><span class="o">::</span><span class="w"> </span><span class="n">field_by_field</span><span class="w"> </span><span class="o">::</span><span class="w"> </span><span class="n">EqualFieldByField</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">SingleUnitEnum</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="n">fields_not_equal</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="bp">self</span><span class="w"> </span><span class="p">,</span><span class="w"> </span><span class="n">other</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">Self</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Vec</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="o">::</span><span class="w"> </span><span class="n">field_by_field</span><span class="w"> </span><span class="o">::</span><span class="w"> </span><span class="n">UnequalField</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="n">allow</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="n">unused_mut</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="p">]</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">list</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="nb">Vec</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="o">::</span><span class="w"> </span><span class="n">field_by_field</span><span class="w"> </span><span class="o">::</span><span class="w"> </span><span class="n">UnequalField</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Vec</span><span class="w"> </span><span class="o">::</span><span class="w"> </span><span class="n">new</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="p">;</span><span class="w"> </span><span class="k">match</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="bp">self</span><span class="w"> </span><span class="p">,</span><span class="w"> </span><span class="n">other</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">log_syntax</span><span class="w"> </span><span class="o">!</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">SingleUnitEnum</span><span class="w"> </span><span class="o">::</span><span class="w"> </span><span class="n">One</span><span class="w"> </span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">SingleUnitEnum</span><span class="w"> </span><span class="o">::</span><span class="w"> </span><span class="n">One</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="n">list</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="n">assert_equal_field_by_field</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="bp">self</span><span class="w"> </span><span class="p">,</span><span class="w"> </span><span class="n">other</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">SingleUnitEnum</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="n">errs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="w"> </span><span class="p">.</span><span class="w"> </span><span class="n">fields_not_equal</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="n">other</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="p">;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">errs</span><span class="w"> </span><span class="p">.</span><span class="w"> </span><span class="n">len</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">errmsg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">String</span><span class="w"> </span><span class="o">::</span><span class="w"> </span><span class="n">from</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="s">"</span><span class="se">\n</span><span class="s">    Items are not equal:</span><span class="se">\n</span><span class="s">"</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="p">;</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">field_err</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">errs</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">errmsg</span><span class="w"> </span><span class="p">.</span><span class="w"> </span><span class="n">push_str</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">format</span><span class="w"> </span><span class="o">!</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="s">"        {}: {:?} != {:?}</span><span class="se">\n</span><span class="s">"</span><span class="w"> </span><span class="p">,</span><span class="w"> </span><span class="n">field_err</span><span class="w"> </span><span class="p">.</span><span class="w"> </span><span class="n">field_name</span><span class="w"> </span><span class="p">,</span><span class="w"> </span><span class="n">field_err</span><span class="w"> </span><span class="p">.</span><span class="w"> </span><span class="n">actually</span><span class="w"> </span><span class="p">,</span><span class="w"> </span><span class="n">field_err</span><span class="w"> </span><span class="p">.</span><span class="w"> </span><span class="n">expected</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="p">;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="n">ac_exp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">format</span><span class="w"> </span><span class="o">!</span><span class="w"> </span><span class="p">(</span><span class="w"> </span><span class="s">"    actually: {:?}</span><span class="se">\n</span><span class="s">    \</span>
+<span class="s">  |                                                                                                                                                                                                                                                                                                                                                                               ^</span>
+</pre>
+
+
+<p>If you scroll all the way to the right you'll see where I omitted a match arm
+entirely, causing Rust to just barf at me.</p>
+<p>Perhaps the most interesting part of this is that these errors come from within
+my procedural macro, but for some reason they result in error messages that
+include the generated source, making them among the easiest proc-macro code to
+debug.</p>
+<h2>Syntactically valid errors</h2>
+<h3>An Error</h3>
+<p>Tests exist to make it possible to refactor and know that your code still
+works, and if you do TDD to give you a nice incremental target to work towards.
+They're great at helping write features, and the Rust compiler is great at
+helping prevent stupid mistakes from creeping into prod.</p>
+<p>But! When writing custom derive macros, these errors can not only prevent your
+code from compiling, they can prevent your code from <em>even existing</em>. Let's say
+I forget to unquote an ident somewhere. For
+example,
+<a href="https://github.com/quodlibetor/field-by-field/blob/28a5003fdcb58b350125197d0708844af8c7ec1b/field-by-field-macros/src/lib.rs#L130">I've got a line</a> that
+looks like:</p>
+<pre class="code literal-block"><span></span><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="n">is_multivariant</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="c1">// long and simple code</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="n">quote</span><span class="o">!</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">            </span><span class="p">(</span><span class="w"> </span><span class="o">&amp;</span><span class="err">#</span><span class="n">name</span><span class="o">::</span><span class="err">#</span><span class="n">var_name</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="err">#</span><span class="n">name</span><span class="o">::</span><span class="err">#</span><span class="n">var_name</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{}</span><span class="w"></span>
+<span class="w">        </span><span class="p">}</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+</pre>
+
+
+<p>What happens if I forget to include one of the <code>#</code>s? What will that look like
+to me as I'm writing it, and if I screw something up in a release, what will it
+look like to my downstream users? What can we do to figure out the fat-fingered
+mistake I've made?</p>
+<p>Let's take a look:</p>
+<p>The unexpanded error message (from above, where I forgot to unquote a token)
+will be:</p>
+<pre class="code literal-block"><span></span><span class="gp">$</span> cargo <span class="nb">test</span> --test derive-enum-unit
+<span class="go">   Compiling field-by-field-macros v0.1.0 (file:///Users/bwm/projects/field-by-field/field-by-field-macros)</span>
+<span class="go">error: no associated item named `var_name` found for type `UnitEnum` in the current scope</span>
+<span class="go"> --&gt; tests/derive-enum-unit.rs:9:10</span>
+<span class="go">  |</span>
+<span class="go">9 | #[derive(FieldByField, Debug)]</span>
+<span class="go">  |          ^^^^^^^^^^^^</span>
+</pre>
+
+
+<p>Hm. Okay I know I should look for <code>var_name</code> in my code, somewhere. The rest of
+this post is about getting better error messages.</p>
+<h3>cargo expand</h3>
+<p>The <a href="https://crates.io/crates/cargo-expand"><code>cargo-expand</code></a> Cargo subcommand
+(by the author of the <code>syn</code> and <code>quote</code> crates that are the bread and butter of
+custom-derive implementations) is supremely helpful for figuring out what is
+actually going on with your code.</p>
+<p>Of particular note for the way that I've been hacking, <code>cargo-expand</code> works
+with integration test files. I've found myself in an "edit - expand - compile -
+test" loop to figure out what the heck I was trying to do. What that looks like
+in more detail for me is something like:</p>
+<pre class="code literal-block"><span></span><span class="gp">$</span> emacs src/lib.rs
+<span class="gp">$</span> <span class="c1"># expanded code relies on some internal rust features:</span>
+<span class="gp">$</span> <span class="nb">echo</span> <span class="s1">'#![feature(box_syntax, test, fmt_internals)]'</span> &gt; tests/derive-enum-unit-expanded.rs
+<span class="gp">$</span> cargo expand --test derive-enum-struct &gt; tests/derive-enum-struct-expanded.rs
+<span class="gp">$</span> cargo <span class="nb">test</span> --test derive-enum-struct-expanded
+</pre>
+
+
+<p>This results in wildly different error messages.</p>
+<pre class="code literal-block"><span></span><span class="gp">$</span> cargo <span class="nb">test</span> --test derive-enum-unit-expanded
+<span class="go">   Compiling field-by-field-macros v0.1.0 (file:///Users/bwm/projects/field-by-field/field-by-field-macros)</span>
+<span class="go">... 30 lines of errors about the format! macro</span>
+<span class="go">error: no associated item named `var_name` found for type `UnitEnum` in the current scope</span>
+<span class="go">  --&gt; tests/derive-enum-unit-expanded.rs:41:15</span>
+<span class="go">   |</span>
+<span class="go">41 |             (&amp;UnitEnum::var_name, &amp;UnitEnum::One) =&gt; {}</span>
+<span class="go">   |               ^^^^^^^^^^^^^^^^^^</span>
+
+<span class="go">error: no associated item named `var_name` found for type `UnitEnum` in the current scope</span>
+<span class="go">  --&gt; tests/derive-enum-unit-expanded.rs:72:15</span>
+<span class="go">   |</span>
+<span class="go">72 |             (&amp;UnitEnum::var_name, &amp;UnitEnum::Two) =&gt; {}</span>
+<span class="go">   |               ^^^^^^^^^^^^^^^^^^</span>
+
+<span class="go">... 30 lines of errors about the format! macro</span>
+
+<span class="go">error: aborting due to 6 previous errors</span>
+
+<span class="go">error: Could not compile `field-by-field-macros`.</span>
+</pre>
+
+
+<p>In addition, this error will be in context, so it's more straightforward to see
+exactly where in my generating code it is probably coming from. In particular,
+for my code, this turns into:</p>
+<pre class="code literal-block"><span></span><span class="k">impl</span><span class="w"> </span><span class="o">::</span><span class="n">field_by_field</span><span class="o">::</span><span class="n">EqualFieldByField</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">UnitEnum</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">fn</span><span class="w"> </span><span class="n">fields_not_equal</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">other</span><span class="o">:</span><span class="w"> </span><span class="o">&amp;</span><span class="n">Self</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;::</span><span class="n">field_by_field</span><span class="o">::</span><span class="n">UnequalField</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">list</span><span class="o">:</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;::</span><span class="n">field_by_field</span><span class="o">::</span><span class="n">UnequalField</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Vec</span><span class="o">::</span><span class="n">new</span><span class="p">();</span><span class="w"></span>
+<span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">            </span><span class="p">(</span><span class="o">&amp;</span><span class="n">UnitEnum</span><span class="o">::</span><span class="n">var_name</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">UnitEnum</span><span class="o">::</span><span class="n">One</span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{}</span><span class="w"></span>
+</pre>
+
+
+<p>Which makes it much more obvious to me where I should be looking.</p>
+<p>It also means that I can edit the code in place and often get rid of that
+specific error (although including <code>format!</code>/<code>println!</code>/etc anywhere in your
+macro output seems to prevent it from ever succeeding building) which is also a
+much faster edit loop, since emacs + flycheck will show me the error while I'm
+editing, and will show me that I've fixed it when I have.</p>
+<h3>println!</h3>
+<p><code>cargo-expand</code> is the big guns, the first thing I reach for when I don't even
+know what part of my code is causing the error. If I know approximately what
+I'm doing, though, it's possible to get less verbose output by just using
+<code>println!</code>.
+<a href="https://docs.rs/quote/0.3.10/quote/struct.Tokens.html"><code>Tokens</code> objects</a>
+implement <code>Display</code> and <code>Debug</code>, so if you've combined several <code>quote!</code> macros,
+or you aren't sure what the values of variables are, this is a pretty good
+option. (Probably you could use a debugger here, but that idea hadn't even
+occured to me until right now.)</p>
+<p>Printed output just happens at compile time, so the same <code>cargo test --test
+&lt;file&gt;</code> code works to narrow to exactly the use case you want to expand:</p>
+<p>So if I've got the same error as above, I'll modify my code like:</p>
+<pre class="code literal-block"><span></span><span class="kd">let</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">quote</span><span class="o">!</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="p">(</span><span class="w"> </span><span class="o">&amp;</span><span class="err">#</span><span class="n">name</span><span class="o">::</span><span class="n">var_name</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="err">#</span><span class="n">name</span><span class="o">::</span><span class="err">#</span><span class="n">var_name</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{}</span><span class="w"></span>
+<span class="p">};</span><span class="w"></span>
+<span class="n">println</span><span class="o">!</span><span class="p">(</span><span class="s">"in single variant: {}"</span><span class="p">,</span><span class="w"> </span><span class="n">r</span><span class="p">);</span><span class="w"></span>
+<span class="n">r</span><span class="w"></span>
+</pre>
+
+
+<pre class="code literal-block"><span></span><span class="gp">$</span> cargo <span class="nb">test</span> --test derive-enum-unit
+<span class="go">   Compiling field-by-field-macros v0.1.0 (file:///Users/bwm/projects/field-by-field/field-by-field-macros)</span>
+<span class="go">in single variant: ( &amp; SingleUnitEnum :: var_name , &amp; SingleUnitEnum :: One ) =&gt; { }</span>
+<span class="go">error: no associated item named `var_name` found for type `SingleUnitEnum` in the current scope</span>
+<span class="go">  --&gt; tests/derive-enum-unit.rs:15:10</span>
+<span class="go">   |</span>
+<span class="go">15 | #[derive(FieldByField, Debug)]</span>
+<span class="go">   |          ^^^^^^^^^^^^</span>
+
+<span class="go">error: aborting due to previous error</span>
+
+<span class="go">error: Could not compile `field-by-field-macros`.</span>
+</pre>
+
+
+<p>Which, when you look at what's actually there, after <code>in single variant</code>:</p>
+<pre class="code literal-block"><span></span><span class="p">(</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">SingleUnitEnum</span><span class="w"> </span><span class="o">::</span><span class="w"> </span><span class="n">var_name</span><span class="w"> </span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">SingleUnitEnum</span><span class="w"> </span><span class="o">::</span><span class="w"> </span><span class="n">One</span><span class="w"> </span><span class="p">)</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">}</span><span class="w"></span>
+</pre>
+
+
+<p>That looks just like a normal match arm, but that <code>var_name</code> is suspiciously
+similar to the variable in my code, not in the code I'm decorating.</p>
+<p>Aside: one of the things that caused me some headaches in my original
+implementation of this was that I was using similar variable names in my tests
+and in my code, and so these errors weren't occuring because I had the correct
+literal text in my quasi quoted Rust. When I figured out what was going on it
+was hilarious, believe me.</p>
+<h2>Takeaways</h2>
+<p>This is actually pretty nice! Using <code>quote!</code> as a template language is pretty
+convenient, even though the multiple phases of compilation mean that debugging
+is a little rougher than writing "regular" code. I hope that we will eventually
+get span information for procedurally-generated code, making the debug cycle
+faster.</p>
+<p>It would be nice if there was a way to pass rust the <code>--pretty expanded</code> option
+but exclude some specific macros -- probably anything from inside std would be
+the right thing, since those things seem to rely on dark magic that I can't get
+to compile.</p>
+<p>I would like to investigate actually using a debugger to hook into the
+code-generation phase. I assume that's well-trod ground, and that I'm just not
+familiar with it.</p>
+<p>I'm very excited for the things that will be <em><del>possible</del></em> accessible now that
+custom derive is stable, and if procedural macros end up as nice as custom
+derive is then I have a combination of hope and trepidation surrounding the
+kinds of magic that Rust will provide.</p>
+</div>
+    </div>
+    </article>
+</div>
+
+
+
+
+
+
+
+        </div>
+        <!--End of body content-->
+
+        <footer id="footer">
+            Contents © 2017         <a href="mailto:quodlibetor@gmail.com">Brandon W Maister</a> - Powered by         <a href="https://getnikola.com" rel="nofollow">Nikola</a>         
+            
+        </footer>
+</div>
+</div>
+
+
+            <script src="assets/js/all-nocdn.js"></script><script>$('a.image-reference:not(.islink) img:not(.islink)').parent().colorbox({rel:"gal",maxWidth:"100%",maxHeight:"100%",scalePhotos:true});</script><!-- fancy dates --><script>
+    moment.locale("en");
+    fancydates(0, "YYYY-MM-DD HH:mm");
+    </script><!-- end fancy dates -->
+</body>
+</html>

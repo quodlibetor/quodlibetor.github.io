@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="assets/xml/rss.xsl" media="all"?><rss xmlns:atom="http://www.w3.org/2005/Atom" version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/"><channel><title>Light Fiction</title><link>https://quodlibetor.github.io/</link><description>ain't that the truth</description><atom:link href="https://quodlibetor.github.io/rss.xml" type="application/rss+xml" rel="self"></atom:link><language>en</language><lastBuildDate>Mon, 16 Jan 2017 05:02:08 GMT</lastBuildDate><generator>Nikola (getnikola.com)</generator><docs>http://blogs.law.harvard.edu/tech/rss</docs><item><title>Field-by-Field errors</title><link>https://quodlibetor.github.io/posts/field-by-field-errors/</link><dc:creator>Brandon W Maister</dc:creator><description>&lt;div&gt;&lt;p&gt;I come from more dynamic languages (mostly Python, Java, Javascript), where
+types live in the object namespace. In general I consider runtime fiddling --
+either introspection or, god forbid, modification -- with the type space to be
+a wild antipattern. In other words, I don't like magic in production code.&lt;/p&gt;
+&lt;p&gt;That clean philosophy goes out the window when I'm writing tests. For tests I
+want the fewest number of lines of code to give me maximum debuggability, which
+often means type-and-object-introspection and all kinds of modification
+shenanigans.&lt;/p&gt;
+&lt;p&gt;I've been wanting to play with the new Macros 1.1 (custom derive) system for
+awhile, so I've been looking for something that really calls out for magic,
+something that can't be done reasonably without observing the syntactic
+structure of the code I'm working with.&lt;/p&gt;
+&lt;p&gt;One feature that I miss when working with large structs in Rust
+is
+&lt;a href="http://joel-costigliola.github.io/assertj/assertj-core-features-highlight.html#field-by-field"&gt;AssertJ's field-by-field assertions&lt;/a&gt;.
+It's some Java magic that very quickly lets you determine which parts of
+objects are distinct. This gives me a pretty nice workflow where I can create
+an "expected object" in a setup function and get error messages that show me
+specifically what is unexpected, while giving full context for the objects that
+are busted. In particular, I love it when it tells me that two UUIDs don't
+match by one bit inside of classes that have 10, 20, or 30 fields. (Nobody
+wants classes with 30 fields, I know.)&lt;/p&gt;
+&lt;p&gt;So &lt;a href="https://github.com/quodlibetor/field-by-field"&gt;I've written&lt;/a&gt; something like
+it for Rust.&lt;/p&gt;
+&lt;p&gt;Given a struct and a test function that look like:&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="cp"&gt;#[derive(FieldByField, Debug)]&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="k"&gt;struct&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Something&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;      &lt;/span&gt;&lt;span class="n"&gt;hello&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;String&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;      &lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="kt"&gt;i8&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;      &lt;/span&gt;&lt;span class="n"&gt;val2&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="kt"&gt;i8&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;      &lt;/span&gt;&lt;span class="n"&gt;val3&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="kt"&gt;i8&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="cp"&gt;#[test]&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;assert_catches_differences&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;      &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;one&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Something&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;hello&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="s"&gt;"one"&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;into&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;val2&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="mi"&gt;5&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;val3&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;};&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;      &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;two&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Something&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;hello&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="s"&gt;"two"&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;into&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;val&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;val2&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;val3&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;};&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;      &lt;/span&gt;&lt;span class="n"&gt;one&lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="n"&gt;assert_equal_field_by_field&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;two&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/pre&gt;
+
+
+&lt;p&gt;I can get a pretty good error message, that shows exactly which fields
+weren't equal:&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;&lt;span&gt;&lt;/span&gt;thread 'assert_catches_differences' panicked at '
+      Items are not equal:
+          hello: "one" != "two"
+          val2: 5 != 2
+      actually: Something { hello: "one", val: 1, val2: 5, val3: 3 }
+      expected: Something { hello: "two", val: 1, val2: 2, val3: 3 }
+  ', derive-struct.rs:11
+&lt;/pre&gt;
+
+
+&lt;p&gt;For small structs like this it isn't essential, but with objects that contain
+many fields, or objects that contain a lot of fields that look mostly similar
+I find it to be a huge time-saver.&lt;/p&gt;
+&lt;p&gt;This isn't the story of that (as-yet-officially-unnamed) crate. This also isn't
+the story of /learning/ macros 1.1,
+&lt;a href="https://cbreeden.github.io/Macros11/"&gt;cbreedan has already covered that well&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;It's a partial story of me learning to debug my custom derive code, and some
+tools provided by the Rust ecosystem to do so.&lt;/p&gt;&lt;/div&gt;</description><guid>https://quodlibetor.github.io/posts/field-by-field-errors/</guid><pubDate>Mon, 16 Jan 2017 04:57:30 GMT</pubDate></item><item><title>Debugging Rust's new Custom Derive system</title><link>https://quodlibetor.github.io/posts/debugging-rusts-new-custom-derive-system/</link><dc:creator>Brandon W Maister</dc:creator><description>&lt;div&gt;&lt;h2&gt;Why a custom derive macro&lt;/h2&gt;
+&lt;p&gt;I've been working
+on &lt;a href="https://github.com/quodlibetor/field-by-field"&gt;a couple of crates&lt;/a&gt; to copy
+over
+&lt;a href="http://joel-costigliola.github.io/assertj/assertj-core-features-highlight.html#field-by-field"&gt;the magic of AssertJ's field-by-field assertions&lt;/a&gt; to
+Rust. Partially as a way of learning Macros 1.1/custom derive, and partially
+because it's one of my favorite testing tools and nobody should have to live
+without it.&lt;/p&gt;
+&lt;p&gt;This post is about what I've been doing to &lt;em&gt;debug&lt;/em&gt; my custom derive
+implementation, which can require a couple of extra steps to get to the same
+kind of good error messages that I'm used to from regular Rust code.&lt;/p&gt;
+&lt;h2&gt;Debugging&lt;/h2&gt;
+&lt;p&gt;There are a couple
+tips &lt;a href="https://github.com/dtolnay/syn#testing"&gt;in the &lt;code&gt;syn&lt;/code&gt; crate's README&lt;/a&gt;,
+which were the first thing that I read when I started working on
+field-by-field. Most of this post is just me exploring the implications and
+going into a bit/lots more detail.&lt;/p&gt;
+&lt;h3&gt;test files&lt;/h3&gt;
+&lt;p&gt;I'm writing a testing tool, so of course the first thing that I want to do is
+test that my code does what I want it to do. Plugins (custom-derive included)
+cannot be tested using the standard in-module &lt;code&gt;#[test]&lt;/code&gt; annotation that most
+Rust code uses, but you can still use integration tests via the &lt;code&gt;tests/&lt;/code&gt;
+directory that Cargo knows about.&lt;/p&gt;
+&lt;p&gt;These modules are linked against the macro crate that you are writing, so
+everything works basically the same except that you &lt;a href="https://github.com/quodlibetor/field-by-field/blob/28a5003fdcb58b350125197d0708844af8c7ec1b/field-by-field-macros/tests/derive-enum-struct.rs"&gt;end up using a
+&lt;code&gt;#[macro_use] my_crate&lt;/code&gt; to make it
+work&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;At that point the standard &lt;code&gt;#[test]&lt;/code&gt; attribute does what you expect, and you
+can use the common &lt;code&gt;cargo test&lt;/code&gt; and &lt;code&gt;cargo test --test &amp;lt;integration-test-file&amp;gt;
+&amp;lt;optional-test-filter&lt;/code&gt; to do what you would expect:&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;&lt;span&gt;&lt;/span&gt;$ cargo &lt;span class="nb"&gt;test&lt;/span&gt;
+    Finished debug &lt;span class="o"&gt;[&lt;/span&gt;unoptimized + debuginfo&lt;span class="o"&gt;]&lt;/span&gt; target&lt;span class="o"&gt;(&lt;/span&gt;s&lt;span class="o"&gt;)&lt;/span&gt; in 0.0 secs
+     Running .../derive_enum_mixed-d370953e520402cf
+...
+&lt;span class="nb"&gt;test&lt;/span&gt; result: ok. &lt;span class="m"&gt;10&lt;/span&gt; passed&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; failed&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; ignored&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; measured
+
+     Running .../derive_enum_struct-8851e9b38fffd49d
+...
+&lt;span class="nb"&gt;test&lt;/span&gt; result: ok. &lt;span class="m"&gt;6&lt;/span&gt; passed&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; failed&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; ignored&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; measured
+
+     Running .../derive_enum_tuple-4b98f23c906ffa8d
+...
+&lt;span class="nb"&gt;test&lt;/span&gt; result: ok. &lt;span class="m"&gt;6&lt;/span&gt; passed&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; failed&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; ignored&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; measured
+
+     Running .../derive_enum_unit-f5f0a72af200d8c4
+...
+&lt;span class="nb"&gt;test&lt;/span&gt; result: ok. &lt;span class="m"&gt;5&lt;/span&gt; passed&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; failed&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; ignored&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; measured
+
+     Running .../derive_struct-116d0c78a0c6e62f
+...
+&lt;span class="nb"&gt;test&lt;/span&gt; result: ok. &lt;span class="m"&gt;4&lt;/span&gt; passed&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; failed&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; ignored&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; measured
+&lt;/pre&gt;
+
+
+&lt;p&gt;Or to be more specific:&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;&lt;span&gt;&lt;/span&gt;$ cargo &lt;span class="nb"&gt;test&lt;/span&gt; --test derive-struct assert_catches
+    Finished debug &lt;span class="o"&gt;[&lt;/span&gt;unoptimized + debuginfo&lt;span class="o"&gt;]&lt;/span&gt; target&lt;span class="o"&gt;(&lt;/span&gt;s&lt;span class="o"&gt;)&lt;/span&gt; in 0.0 secs
+     Running .../derive_struct-116d0c78a0c6e62f
+
+running &lt;span class="m"&gt;1&lt;/span&gt; &lt;span class="nb"&gt;test&lt;/span&gt;
+&lt;span class="nb"&gt;test&lt;/span&gt; assert_catches_differences ... ok
+
+&lt;span class="nb"&gt;test&lt;/span&gt; result: ok. &lt;span class="m"&gt;1&lt;/span&gt; passed&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; failed&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; ignored&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="m"&gt;0&lt;/span&gt; measured
+&lt;/pre&gt;
+
+
+&lt;p&gt;Wheeee.&lt;/p&gt;
+&lt;h2&gt;Now we've got two kinds of problems&lt;/h2&gt;
+&lt;h3&gt;Syntactically invalid code&lt;/h3&gt;
+&lt;p&gt;There are two -- maybe two and half -- phases to compiling these integration
+tests:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;We have to compile the custom-derive library&lt;/li&gt;
+&lt;li&gt;We have to use the compiled lib to actually generate some code&lt;/li&gt;
+&lt;li&gt;That compiled code might generate code that is syntactically unsound&lt;/li&gt;
+&lt;li&gt;Or it could generate code that is syntactically fine, but violates some
+      of rusts guarantees.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;This means that there are three different kind of errors that we can get:
+&lt;em&gt; Regular Rust errors
+&lt;/em&gt; Rust errors because some generated code is invalid
+* Rust errors because the generated code doesn't type-check.&lt;/p&gt;
+&lt;p&gt;Syntactic errors end up causing &lt;em&gt;extremely&lt;/em&gt; long error lines:&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="n"&gt;error&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;expected&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;one&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;of&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="err"&gt;`&lt;/span&gt;&lt;span class="o"&gt;=&amp;gt;&lt;/span&gt;&lt;span class="err"&gt;`&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="err"&gt;`&lt;/span&gt;&lt;span class="k"&gt;if&lt;/span&gt;&lt;span class="err"&gt;`&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;or&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="err"&gt;`&lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="err"&gt;`&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;found&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="err"&gt;`&lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="err"&gt;`&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;--&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="k"&gt;proc&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="n"&gt;macro&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;source&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;code&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;:&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="mi"&gt;367&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;  &lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;|&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;impl&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;field_by_field&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;EqualFieldByField&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;for&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;SingleUnitEnum&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;fields_not_equal&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;other&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;Self&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;Vec&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;field_by_field&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;UnequalField&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="err"&gt;#&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;allow&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;unused_mut&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;mut&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;list&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;Vec&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;lt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;field_by_field&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;UnequalField&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;Vec&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;new&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;match&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;other&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;log_syntax&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;!&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;SingleUnitEnum&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;One&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;SingleUnitEnum&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;One&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;list&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;assert_equal_field_by_field&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;other&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;SingleUnitEnum&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;errs&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;fields_not_equal&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;other&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;if&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;errs&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;len&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;mut&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;errmsg&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;String&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;from&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="s"&gt;"&lt;/span&gt;&lt;span class="se"&gt;\n&lt;/span&gt;&lt;span class="s"&gt;    Items are not equal:&lt;/span&gt;&lt;span class="se"&gt;\n&lt;/span&gt;&lt;span class="s"&gt;"&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;for&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;field_err&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;in&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;errs&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;errmsg&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;push_str&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;format&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;!&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="s"&gt;"        {}: {:?} != {:?}&lt;/span&gt;&lt;span class="se"&gt;\n&lt;/span&gt;&lt;span class="s"&gt;"&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;field_err&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;field_name&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;field_err&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;actually&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;field_err&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;.&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;expected&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;ac_exp&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;format&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;!&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="s"&gt;"    actually: {:?}&lt;/span&gt;&lt;span class="se"&gt;\n&lt;/span&gt;&lt;span class="s"&gt;    \&lt;/span&gt;
+&lt;span class="s"&gt;  |                                                                                                                                                                                                                                                                                                                                                                               ^&lt;/span&gt;
+&lt;/pre&gt;
+
+
+&lt;p&gt;If you scroll all the way to the right you'll see where I omitted a match arm
+entirely, causing Rust to just barf at me.&lt;/p&gt;
+&lt;p&gt;Perhaps the most interesting part of this is that these errors come from within
+my procedural macro, but for some reason they result in error messages that
+include the generated source, making them among the easiest proc-macro code to
+debug.&lt;/p&gt;
+&lt;h2&gt;Syntactically valid errors&lt;/h2&gt;
+&lt;h3&gt;An Error&lt;/h3&gt;
+&lt;p&gt;Tests exist to make it possible to refactor and know that your code still
+works, and if you do TDD to give you a nice incremental target to work towards.
+They're great at helping write features, and the Rust compiler is great at
+helping prevent stupid mistakes from creeping into prod.&lt;/p&gt;
+&lt;p&gt;But! When writing custom derive macros, these errors can not only prevent your
+code from compiling, they can prevent your code from &lt;em&gt;even existing&lt;/em&gt;. Let's say
+I forget to unquote an ident somewhere. For
+example,
+&lt;a href="https://github.com/quodlibetor/field-by-field/blob/28a5003fdcb58b350125197d0708844af8c7ec1b/field-by-field-macros/src/lib.rs#L130"&gt;I've got a line&lt;/a&gt; that
+looks like:&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;if&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;is_multivariant&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="c1"&gt;// long and simple code&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;else&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="n"&gt;quote&lt;/span&gt;&lt;span class="o"&gt;!&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="err"&gt;#&lt;/span&gt;&lt;span class="n"&gt;name&lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="err"&gt;#&lt;/span&gt;&lt;span class="n"&gt;var_name&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="err"&gt;#&lt;/span&gt;&lt;span class="n"&gt;name&lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="err"&gt;#&lt;/span&gt;&lt;span class="n"&gt;var_name&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/pre&gt;
+
+
+&lt;p&gt;What happens if I forget to include one of the &lt;code&gt;#&lt;/code&gt;s? What will that look like
+to me as I'm writing it, and if I screw something up in a release, what will it
+look like to my downstream users? What can we do to figure out the fat-fingered
+mistake I've made?&lt;/p&gt;
+&lt;p&gt;Let's take a look:&lt;/p&gt;
+&lt;p&gt;The unexpanded error message (from above, where I forgot to unquote a token)
+will be:&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="gp"&gt;$&lt;/span&gt; cargo &lt;span class="nb"&gt;test&lt;/span&gt; --test derive-enum-unit
+&lt;span class="go"&gt;   Compiling field-by-field-macros v0.1.0 (file:///Users/bwm/projects/field-by-field/field-by-field-macros)&lt;/span&gt;
+&lt;span class="go"&gt;error: no associated item named `var_name` found for type `UnitEnum` in the current scope&lt;/span&gt;
+&lt;span class="go"&gt; --&amp;gt; tests/derive-enum-unit.rs:9:10&lt;/span&gt;
+&lt;span class="go"&gt;  |&lt;/span&gt;
+&lt;span class="go"&gt;9 | #[derive(FieldByField, Debug)]&lt;/span&gt;
+&lt;span class="go"&gt;  |          ^^^^^^^^^^^^&lt;/span&gt;
+&lt;/pre&gt;
+
+
+&lt;p&gt;Hm. Okay I know I should look for &lt;code&gt;var_name&lt;/code&gt; in my code, somewhere. The rest of
+this post is about getting better error messages.&lt;/p&gt;
+&lt;h3&gt;cargo expand&lt;/h3&gt;
+&lt;p&gt;The &lt;a href="https://crates.io/crates/cargo-expand"&gt;&lt;code&gt;cargo-expand&lt;/code&gt;&lt;/a&gt; Cargo subcommand
+(by the author of the &lt;code&gt;syn&lt;/code&gt; and &lt;code&gt;quote&lt;/code&gt; crates that are the bread and butter of
+custom-derive implementations) is supremely helpful for figuring out what is
+actually going on with your code.&lt;/p&gt;
+&lt;p&gt;Of particular note for the way that I've been hacking, &lt;code&gt;cargo-expand&lt;/code&gt; works
+with integration test files. I've found myself in an "edit - expand - compile -
+test" loop to figure out what the heck I was trying to do. What that looks like
+in more detail for me is something like:&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="gp"&gt;$&lt;/span&gt; emacs src/lib.rs
+&lt;span class="gp"&gt;$&lt;/span&gt; &lt;span class="c1"&gt;# expanded code relies on some internal rust features:&lt;/span&gt;
+&lt;span class="gp"&gt;$&lt;/span&gt; &lt;span class="nb"&gt;echo&lt;/span&gt; &lt;span class="s1"&gt;'#![feature(box_syntax, test, fmt_internals)]'&lt;/span&gt; &amp;gt; tests/derive-enum-unit-expanded.rs
+&lt;span class="gp"&gt;$&lt;/span&gt; cargo expand --test derive-enum-struct &amp;gt; tests/derive-enum-struct-expanded.rs
+&lt;span class="gp"&gt;$&lt;/span&gt; cargo &lt;span class="nb"&gt;test&lt;/span&gt; --test derive-enum-struct-expanded
+&lt;/pre&gt;
+
+
+&lt;p&gt;This results in wildly different error messages.&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="gp"&gt;$&lt;/span&gt; cargo &lt;span class="nb"&gt;test&lt;/span&gt; --test derive-enum-unit-expanded
+&lt;span class="go"&gt;   Compiling field-by-field-macros v0.1.0 (file:///Users/bwm/projects/field-by-field/field-by-field-macros)&lt;/span&gt;
+&lt;span class="go"&gt;... 30 lines of errors about the format! macro&lt;/span&gt;
+&lt;span class="go"&gt;error: no associated item named `var_name` found for type `UnitEnum` in the current scope&lt;/span&gt;
+&lt;span class="go"&gt;  --&amp;gt; tests/derive-enum-unit-expanded.rs:41:15&lt;/span&gt;
+&lt;span class="go"&gt;   |&lt;/span&gt;
+&lt;span class="go"&gt;41 |             (&amp;amp;UnitEnum::var_name, &amp;amp;UnitEnum::One) =&amp;gt; {}&lt;/span&gt;
+&lt;span class="go"&gt;   |               ^^^^^^^^^^^^^^^^^^&lt;/span&gt;
+
+&lt;span class="go"&gt;error: no associated item named `var_name` found for type `UnitEnum` in the current scope&lt;/span&gt;
+&lt;span class="go"&gt;  --&amp;gt; tests/derive-enum-unit-expanded.rs:72:15&lt;/span&gt;
+&lt;span class="go"&gt;   |&lt;/span&gt;
+&lt;span class="go"&gt;72 |             (&amp;amp;UnitEnum::var_name, &amp;amp;UnitEnum::Two) =&amp;gt; {}&lt;/span&gt;
+&lt;span class="go"&gt;   |               ^^^^^^^^^^^^^^^^^^&lt;/span&gt;
+
+&lt;span class="go"&gt;... 30 lines of errors about the format! macro&lt;/span&gt;
+
+&lt;span class="go"&gt;error: aborting due to 6 previous errors&lt;/span&gt;
+
+&lt;span class="go"&gt;error: Could not compile `field-by-field-macros`.&lt;/span&gt;
+&lt;/pre&gt;
+
+
+&lt;p&gt;In addition, this error will be in context, so it's more straightforward to see
+exactly where in my generating code it is probably coming from. In particular,
+for my code, this turns into:&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;impl&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="n"&gt;field_by_field&lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="n"&gt;EqualFieldByField&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;for&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;UnitEnum&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="k"&gt;fn&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;fields_not_equal&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;other&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;Self&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;Vec&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;::&lt;/span&gt;&lt;span class="n"&gt;field_by_field&lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="n"&gt;UnequalField&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="k"&gt;mut&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;list&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;Vec&lt;/span&gt;&lt;span class="o"&gt;&amp;lt;::&lt;/span&gt;&lt;span class="n"&gt;field_by_field&lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="n"&gt;UnequalField&lt;/span&gt;&lt;span class="o"&gt;&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="nb"&gt;Vec&lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="n"&gt;new&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;        &lt;/span&gt;&lt;span class="k"&gt;match&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="bp"&gt;self&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;other&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;            &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;UnitEnum&lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="n"&gt;var_name&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;UnitEnum&lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="n"&gt;One&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/pre&gt;
+
+
+&lt;p&gt;Which makes it much more obvious to me where I should be looking.&lt;/p&gt;
+&lt;p&gt;It also means that I can edit the code in place and often get rid of that
+specific error (although including &lt;code&gt;format!&lt;/code&gt;/&lt;code&gt;println!&lt;/code&gt;/etc anywhere in your
+macro output seems to prevent it from ever succeeding building) which is also a
+much faster edit loop, since emacs + flycheck will show me the error while I'm
+editing, and will show me that I've fixed it when I have.&lt;/p&gt;
+&lt;h3&gt;println!&lt;/h3&gt;
+&lt;p&gt;&lt;code&gt;cargo-expand&lt;/code&gt; is the big guns, the first thing I reach for when I don't even
+know what part of my code is causing the error. If I know approximately what
+I'm doing, though, it's possible to get less verbose output by just using
+&lt;code&gt;println!&lt;/code&gt;.
+&lt;a href="https://docs.rs/quote/0.3.10/quote/struct.Tokens.html"&gt;&lt;code&gt;Tokens&lt;/code&gt; objects&lt;/a&gt;
+implement &lt;code&gt;Display&lt;/code&gt; and &lt;code&gt;Debug&lt;/code&gt;, so if you've combined several &lt;code&gt;quote!&lt;/code&gt; macros,
+or you aren't sure what the values of variables are, this is a pretty good
+option. (Probably you could use a debugger here, but that idea hadn't even
+occured to me until right now.)&lt;/p&gt;
+&lt;p&gt;Printed output just happens at compile time, so the same &lt;code&gt;cargo test --test
+&amp;lt;file&amp;gt;&lt;/code&gt; code works to narrow to exactly the use case you want to expand:&lt;/p&gt;
+&lt;p&gt;So if I've got the same error as above, I'll modify my code like:&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kd"&gt;let&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;quote&lt;/span&gt;&lt;span class="o"&gt;!&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="w"&gt;    &lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="err"&gt;#&lt;/span&gt;&lt;span class="n"&gt;name&lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="n"&gt;var_name&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="err"&gt;#&lt;/span&gt;&lt;span class="n"&gt;name&lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="err"&gt;#&lt;/span&gt;&lt;span class="n"&gt;var_name&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="p"&gt;};&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="n"&gt;println&lt;/span&gt;&lt;span class="o"&gt;!&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s"&gt;"in single variant: {}"&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;span class="n"&gt;r&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/pre&gt;
+
+
+&lt;pre class="code literal-block"&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="gp"&gt;$&lt;/span&gt; cargo &lt;span class="nb"&gt;test&lt;/span&gt; --test derive-enum-unit
+&lt;span class="go"&gt;   Compiling field-by-field-macros v0.1.0 (file:///Users/bwm/projects/field-by-field/field-by-field-macros)&lt;/span&gt;
+&lt;span class="go"&gt;in single variant: ( &amp;amp; SingleUnitEnum :: var_name , &amp;amp; SingleUnitEnum :: One ) =&amp;gt; { }&lt;/span&gt;
+&lt;span class="go"&gt;error: no associated item named `var_name` found for type `SingleUnitEnum` in the current scope&lt;/span&gt;
+&lt;span class="go"&gt;  --&amp;gt; tests/derive-enum-unit.rs:15:10&lt;/span&gt;
+&lt;span class="go"&gt;   |&lt;/span&gt;
+&lt;span class="go"&gt;15 | #[derive(FieldByField, Debug)]&lt;/span&gt;
+&lt;span class="go"&gt;   |          ^^^^^^^^^^^^&lt;/span&gt;
+
+&lt;span class="go"&gt;error: aborting due to previous error&lt;/span&gt;
+
+&lt;span class="go"&gt;error: Could not compile `field-by-field-macros`.&lt;/span&gt;
+&lt;/pre&gt;
+
+
+&lt;p&gt;Which, when you look at what's actually there, after &lt;code&gt;in single variant&lt;/code&gt;:&lt;/p&gt;
+&lt;pre class="code literal-block"&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;SingleUnitEnum&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;var_name&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;SingleUnitEnum&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;::&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="n"&gt;One&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="o"&gt;=&amp;gt;&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="w"&gt; &lt;/span&gt;&lt;span class="p"&gt;}&lt;/span&gt;&lt;span class="w"&gt;&lt;/span&gt;
+&lt;/pre&gt;
+
+
+&lt;p&gt;That looks just like a normal match arm, but that &lt;code&gt;var_name&lt;/code&gt; is suspiciously
+similar to the variable in my code, not in the code I'm decorating.&lt;/p&gt;
+&lt;p&gt;Aside: one of the things that caused me some headaches in my original
+implementation of this was that I was using similar variable names in my tests
+and in my code, and so these errors weren't occuring because I had the correct
+literal text in my quasi quoted Rust. When I figured out what was going on it
+was hilarious, believe me.&lt;/p&gt;
+&lt;h2&gt;Takeaways&lt;/h2&gt;
+&lt;p&gt;This is actually pretty nice! Using &lt;code&gt;quote!&lt;/code&gt; as a template language is pretty
+convenient, even though the multiple phases of compilation mean that debugging
+is a little rougher than writing "regular" code. I hope that we will eventually
+get span information for procedurally-generated code, making the debug cycle
+faster.&lt;/p&gt;
+&lt;p&gt;It would be nice if there was a way to pass rust the &lt;code&gt;--pretty expanded&lt;/code&gt; option
+but exclude some specific macros -- probably anything from inside std would be
+the right thing, since those things seem to rely on dark magic that I can't get
+to compile.&lt;/p&gt;
+&lt;p&gt;I would like to investigate actually using a debugger to hook into the
+code-generation phase. I assume that's well-trod ground, and that I'm just not
+familiar with it.&lt;/p&gt;
+&lt;p&gt;I'm very excited for the things that will be &lt;em&gt;&lt;del&gt;possible&lt;/del&gt;&lt;/em&gt; accessible now that
+custom derive is stable, and if procedural macros end up as nice as custom
+derive is then I have a combination of hope and trepidation surrounding the
+kinds of magic that Rust will provide.&lt;/p&gt;&lt;/div&gt;</description><guid>https://quodlibetor.github.io/posts/debugging-rusts-new-custom-derive-system/</guid><pubDate>Sun, 15 Jan 2017 22:21:40 GMT</pubDate></item></channel></rss>

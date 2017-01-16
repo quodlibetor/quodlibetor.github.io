@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html prefix="og: http://ogp.me/ns# article: http://ogp.me/ns/article# " lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Field-by-Field errors | Light Fiction</title>
+<link href="../../assets/css/all-nocdn.css" rel="stylesheet" type="text/css">
+<meta name="theme-color" content="#5670d4">
+<meta name="generator" content="Nikola (getnikola.com)">
+<link rel="alternate" type="application/rss+xml" title="RSS" href="../../rss.xml">
+<link rel="canonical" href="https://quodlibetor.github.io/posts/field-by-field-errors/">
+<!--[if lt IE 9]><script src="../../assets/js/html5.js"></script><![endif]--><meta name="author" content="Brandon W Maister">
+<link rel="prev" href="../debugging-rusts-new-custom-derive-system/" title="Debugging Rust's new Custom Derive system" type="text/html">
+<meta property="og:site_name" content="Light Fiction">
+<meta property="og:title" content="Field-by-Field errors">
+<meta property="og:url" content="https://quodlibetor.github.io/posts/field-by-field-errors/">
+<meta property="og:description" content="I come from more dynamic languages (mostly Python, Java, Javascript), where
+types live in the object namespace. In general I consider runtime fiddling --
+either introspection or, god forbid, modificat">
+<meta property="og:type" content="article">
+<meta property="article:published_time" content="2017-01-15T23:57:30-05:00">
+</head>
+<body>
+<a href="#content" class="sr-only sr-only-focusable">Skip to main content</a>
+
+<!-- Menubar -->
+
+<nav class="navbar navbar-inverse navbar-static-top"><div class="container">
+<!-- This keeps the margins nice -->
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-navbar" aria-controls="bs-navbar" aria-expanded="false">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="https://quodlibetor.github.io/">
+
+                <span id="blog-title">Light Fiction</span>
+            </a>
+        </div>
+<!-- /.navbar-header -->
+        <div class="collapse navbar-collapse" id="bs-navbar" aria-expanded="false">
+            <ul class="nav navbar-nav">
+<li>
+<a href="../../archive.html">Archive</a>
+                </li>
+<li>
+<a href="../../categories/">Tags</a>
+                </li>
+<li>
+<a href="../../rss.xml">RSS feed</a>
+
+                
+            </li>
+</ul>
+<ul class="nav navbar-nav navbar-right">
+<li>
+    <a href="index.md" id="sourcelink">Source</a>
+    </li>
+
+                
+            </ul>
+</div>
+<!-- /.navbar-collapse -->
+    </div>
+<!-- /.container -->
+</nav><!-- End of Menubar --><div class="container" id="content" role="main">
+    <div class="body-content">
+        <!--Body content-->
+        <div class="row">
+            
+            
+<article class="post-text h-entry hentry postpage" itemscope="itemscope" itemtype="http://schema.org/Article"><header><h1 class="p-name entry-title" itemprop="headline name"><a href="." class="u-url">Field-by-Field errors</a></h1>
+
+        <div class="metadata">
+            <p class="byline author vcard"><span class="byline-name fn">
+                    Brandon W Maister
+            </span></p>
+            <p class="dateline"><a href="." rel="bookmark"><time class="published dt-published" datetime="2017-01-15T23:57:30-05:00" itemprop="datePublished" title="2017-01-15 23:57">2017-01-15 23:57</time></a></p>
+            
+        <p class="sourceline"><a href="index.md" id="sourcelink">Source</a></p>
+
+        </div>
+        
+
+    </header><div class="e-content entry-content" itemprop="articleBody text">
+    <div>
+<p>I come from more dynamic languages (mostly Python, Java, Javascript), where
+types live in the object namespace. In general I consider runtime fiddling --
+either introspection or, god forbid, modification -- with the type space to be
+a wild antipattern. In other words, I don't like magic in production code.</p>
+<p>That clean philosophy goes out the window when I'm writing tests. For tests I
+want the fewest number of lines of code to give me maximum debuggability, which
+often means type-and-object-introspection and all kinds of modification
+shenanigans.</p>
+<p>I've been wanting to play with the new Macros 1.1 (custom derive) system for
+awhile, so I've been looking for something that really calls out for magic,
+something that can't be done reasonably without observing the syntactic
+structure of the code I'm working with.</p>
+<p>One feature that I miss when working with large structs in Rust
+is
+<a href="http://joel-costigliola.github.io/assertj/assertj-core-features-highlight.html#field-by-field">AssertJ's field-by-field assertions</a>.
+It's some Java magic that very quickly lets you determine which parts of
+objects are distinct. This gives me a pretty nice workflow where I can create
+an "expected object" in a setup function and get error messages that show me
+specifically what is unexpected, while giving full context for the objects that
+are busted. In particular, I love it when it tells me that two UUIDs don't
+match by one bit inside of classes that have 10, 20, or 30 fields. (Nobody
+wants classes with 30 fields, I know.)</p>
+<p>So <a href="https://github.com/quodlibetor/field-by-field">I've written</a> something like
+it for Rust.</p>
+<p>Given a struct and a test function that look like:</p>
+<pre class="code literal-block"><span></span><span class="w">  </span><span class="cp">#[derive(FieldByField, Debug)]</span><span class="w"></span>
+<span class="w">  </span><span class="k">struct</span><span class="w"> </span><span class="n">Something</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">      </span><span class="n">hello</span><span class="o">:</span><span class="w"> </span><span class="nb">String</span><span class="p">,</span><span class="w"></span>
+<span class="w">      </span><span class="n">val</span><span class="o">:</span><span class="w"> </span><span class="kt">i8</span><span class="p">,</span><span class="w"></span>
+<span class="w">      </span><span class="n">val2</span><span class="o">:</span><span class="w"> </span><span class="kt">i8</span><span class="p">,</span><span class="w"></span>
+<span class="w">      </span><span class="n">val3</span><span class="o">:</span><span class="w"> </span><span class="kt">i8</span><span class="p">,</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+
+<span class="w">  </span><span class="cp">#[test]</span><span class="w"></span>
+<span class="w">  </span><span class="k">fn</span><span class="w"> </span><span class="n">assert_catches_differences</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">      </span><span class="kd">let</span><span class="w"> </span><span class="n">one</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Something</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">hello</span><span class="o">:</span><span class="w"> </span><span class="s">"one"</span><span class="p">.</span><span class="n">into</span><span class="p">(),</span><span class="w"> </span><span class="n">val</span><span class="o">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">val2</span><span class="o">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="n">val3</span><span class="o">:</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="p">};</span><span class="w"></span>
+<span class="w">      </span><span class="kd">let</span><span class="w"> </span><span class="n">two</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Something</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">hello</span><span class="o">:</span><span class="w"> </span><span class="s">"two"</span><span class="p">.</span><span class="n">into</span><span class="p">(),</span><span class="w"> </span><span class="n">val</span><span class="o">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">val2</span><span class="o">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">val3</span><span class="o">:</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="p">};</span><span class="w"></span>
+
+<span class="w">      </span><span class="n">one</span><span class="p">.</span><span class="n">assert_equal_field_by_field</span><span class="p">(</span><span class="o">&amp;</span><span class="n">two</span><span class="p">);</span><span class="w"></span>
+<span class="w">  </span><span class="p">}</span><span class="w"></span>
+</pre>
+
+
+<p>I can get a pretty good error message, that shows exactly which fields
+weren't equal:</p>
+<pre class="code literal-block"><span></span>thread 'assert_catches_differences' panicked at '
+      Items are not equal:
+          hello: "one" != "two"
+          val2: 5 != 2
+      actually: Something { hello: "one", val: 1, val2: 5, val3: 3 }
+      expected: Something { hello: "two", val: 1, val2: 2, val3: 3 }
+  ', derive-struct.rs:11
+</pre>
+
+
+<p>For small structs like this it isn't essential, but with objects that contain
+many fields, or objects that contain a lot of fields that look mostly similar
+I find it to be a huge time-saver.</p>
+<p>This isn't the story of that (as-yet-officially-unnamed) crate. This also isn't
+the story of /learning/ macros 1.1,
+<a href="https://cbreeden.github.io/Macros11/">cbreedan has already covered that well</a>.</p>
+<p>It's a partial story of me learning to debug my custom derive code, and some
+tools provided by the Rust ecosystem to do so.</p>
+</div>
+    </div>
+    <aside class="postpromonav"><nav><ul class="pager hidden-print">
+<li class="previous">
+                <a href="../debugging-rusts-new-custom-derive-system/" rel="prev" title="Debugging Rust's new Custom Derive system">Previous post</a>
+            </li>
+        </ul></nav></aside></article>
+</div>
+        <!--End of body content-->
+
+        <footer id="footer">
+            Contents © 2017         <a href="mailto:quodlibetor@gmail.com">Brandon W Maister</a> - Powered by         <a href="https://getnikola.com" rel="nofollow">Nikola</a>         
+            
+        </footer>
+</div>
+</div>
+
+
+            <script src="../../assets/js/all-nocdn.js"></script><script>$('a.image-reference:not(.islink) img:not(.islink)').parent().colorbox({rel:"gal",maxWidth:"100%",maxHeight:"100%",scalePhotos:true});</script><!-- fancy dates --><script>
+    moment.locale("en");
+    fancydates(0, "YYYY-MM-DD HH:mm");
+    </script><!-- end fancy dates -->
+</body>
+</html>
